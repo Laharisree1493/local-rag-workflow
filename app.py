@@ -1,55 +1,10 @@
-imort pymupdf4llm
-import re
-import os
-from llama_cpp import Llama
-
-def extract_structured_sections(pdf_path):
-    print("--- Step 1: Extracting layout-aware Markdown with PyMuPDF4LLM ---")
-    md_text = pymupdf4llm.to_markdown(pdf_path)
-    
-    # Split document by headers (#, ##, ###)
-    header_regex = re.compile(r'(^#{1,4}\s+.*$)', re.MULTILINE)
-    parts = header_regex.split(md_text)
-    
-    sections = {}
-    current_header = "Introduction / Overview"
-    sections[current_header] = ""
-    
-    for part in parts:
-        if header_regex.match(part):
-            current_header = part.strip().lstrip('#').strip()
-            sections[current_header] = ""
-        else:
-            sections[current_header] += part
-            
-    return sections
-
-def retrieve_relevant_section(query, sections):
-    print("--- Step 2: Matching query to document structures ---")
-    query_words = set(re.findall(r'\w+', query.lower()))
-    
-    best_match_header = None
-    max_overlap = 0
-    
-    for header in sections.keys():
-        header_words = set(re.findall(r'\w+', header.lower()))
-        overlap = len(query_words.intersection(header_words))
-        
-        if overlap > max_overlap:
-            max_overlap = overlap
-            best_match_header = header
-            
-    if not best_match_header or max_overlap == 0:
-        best_match_header = list(sections.keys())[0]
-        
-    return best_match_header, sections[best_match_header]
 import streamlit as st
 import pymupdf4llm
 import re
 from huggingface_hub import InferenceClient
 
 # Initialize Hugging Face Serverless Client (Runs completely free in the cloud)
-# This replaces the heavy local llama-cpp engine that crashes Streamlit free tier
+# This replaces the heavy local llama-cpp engine that crashes Streamlit's free tier due to RAM limits
 client = InferenceClient("Qwen/Qwen2.5-7B-Instruct")
 
 def extract_structured_sections(pdf_path):
@@ -99,7 +54,7 @@ if uploaded_file is not None:
         f.write(uploaded_file.getbuffer())
         
     # Parse sections
-    if "sections" Packs not in st.session_state:
+    if "sections" not in st.session_state:
         with st.spinner("Processing document structures with PyMuPDF4LLM..."):
             st.session_state.sections = extract_structured_sections("temp_doc.pdf")
         st.success(f"Indexed {len(st.session_state.sections)} sections successfully!")
@@ -130,4 +85,3 @@ Answer:"""
                 st.write(response)
             except Exception as e:
                 st.error(f"API Error: {e}. Try asking again.")
-
