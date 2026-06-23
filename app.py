@@ -3,9 +3,9 @@ import pymupdf4llm
 import re
 from groq import Groq
 
-# Initialize the Groq Client
-# Replace the string below with your actual gsk_... API key
-GROQ_API_KEY = "PASTE_YOUR_GROQ_API_KEY_HERE"
+# Initialize the Groq Client safely using Streamlit Secrets
+# This prevents 401 invalid key errors caused by code hardcoding copy-paste bugs
+GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 client = Groq(api_key=GROQ_API_KEY)
 
 def extract_structured_sections(pdf_path):
