@@ -4,7 +4,6 @@ import re
 from groq import Groq
 
 # Initialize the Groq Client safely using Streamlit Secrets
-# This prevents 401 invalid key errors caused by code hardcoding copy-paste bugs
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 client = Groq(api_key=GROQ_API_KEY)
 
@@ -70,7 +69,7 @@ if uploaded_file is not None:
         st.info(f"🎯 **Targeted Section:** {matched_title}")
         
         # Call Groq API for lightning fast answer generation
-        with st.spinner("Generating answer with Groq Llama 3..."):
+        with st.spinner("Generating answer with Groq Llama 3.3..."):
             try:
                 chat_completion = client.chat.completions.create(
                     messages=[
@@ -83,7 +82,7 @@ if uploaded_file is not None:
                             "content": user_query,
                         }
                     ],
-                    model="llama3-8b-8192",
+                    model="llama-3.3-70b-versatile",
                     temperature=0.1,
                     max_tokens=512,
                 )
