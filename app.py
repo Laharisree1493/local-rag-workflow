@@ -1,4 +1,4 @@
-import pymupdf4llm
+imort pymupdf4llm
 import re
 import os
 from llama_cpp import Llama
@@ -43,48 +43,91 @@ def retrieve_relevant_section(query, sections):
         best_match_header = list(sections.keys())[0]
         
     return best_match_header, sections[best_match_header]
+import streamlit as st
+import pymupdf4llm
+import re
+from huggingface_hub import InferenceClient
 
-def answer_question(query, context_title, context_text, model_path):
-    print("--- Step 3: Generating localized response via Llama.cpp ---")
-    # Low context limit for light processing
-    llm = Llama(model_path=model_path, n_ctx=2048, verbose=False)
+# Initialize Hugging Face Serverless Client (Runs completely free in the cloud)
+# This replaces the heavy local llama-cpp engine that crashes Streamlit free tier
+client = InferenceClient("Qwen/Qwen2.5-7B-Instruct")
+
+def extract_structured_sections(pdf_path):
+    md_text = pymupdf4llm.to_markdown(pdf_path)
+    header_regex = re.compile(r'(^#{1,4}\s+.*$)', re.MULTILINE)
+    parts = header_regex.split(md_text)
     
-    prompt = f"""You are a helpful assistant answering questions strictly based on the context provided below.
+    sections = {}
+    current_header = "Introduction / Overview"
+    sections[current_header] = ""
+    
+    for part in parts:
+        if header_regex.match(part):
+            current_header = part.strip().lstrip('#').strip()
+            sections[current_header] = ""
+        else:
+            sections[current_header] += part
+    return sections
+
+def retrieve_relevant_section(query, sections):
+    query_words = set(re.findall(r'\w+', query.lower()))
+    best_match_header = None
+    max_overlap = 0
+    
+    for header in sections.keys():
+        header_words = set(re.findall(r'\w+', header.lower()))
+        overlap = len(query_words.intersection(header_words))
+        if overlap > max_overlap:
+            max_overlap = overlap
+            best_match_header = header
+            
+    if not best_match_header or max_overlap == 0:
+        best_match_header = list(sections.keys())[0]
+    return best_match_header, sections[best_match_header]
+
+# --- STREAMLIT UI CODE ---
+st.set_page_config(page_title="Mozilla Lightweight RAG", layout="centered")
+st.title("📄 Mozilla.ai Lightweight Document Q&A")
+st.write("Upload a structured PDF document to query it using a Roaming RAG architecture.")
+
+# File Uploader
+uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
+
+if uploaded_file is not None:
+    # Save the file temporarily to read it
+    with open("temp_doc.pdf", "wb") as f:
+        f.write(uploaded_file.getbuffer())
+        
+    # Parse sections
+    if "sections" Packs not in st.session_state:
+        with st.spinner("Processing document structures with PyMuPDF4LLM..."):
+            st.session_state.sections = extract_structured_sections("temp_doc.pdf")
+        st.success(f"Indexed {len(st.session_state.sections)} sections successfully!")
+
+    # Search Bar Query
+    user_query = st.text_input("Ask a question about your document:")
+    
+    if user_query:
+        # Match section
+        matched_title, matched_context = retrieve_relevant_section(user_query, st.session_state.sections)
+        
+        st.info(f"🎯 **Targeted Section:** {matched_title}")
+        
+        # Call API for answer generation
+        with st.spinner("Generating answer..."):
+            prompt = f"""You are a helpful assistant answering questions strictly based on the context provided below.
 If the answer cannot be found in the context, say "I cannot find the information in this section."
 
-[Document Section: {context_title}]
-{context_text}
+[Document Section: {matched_title}]
+{matched_context}
 
-Question: {query}
+Question: {user_query}
 Answer:"""
 
-    response = llm(
-        prompt,
-        max_tokens=256,
-        temperature=0.1,
-        stop=["\n\n", "Question:"]
-    )
-    return response['choices'][0]['text'].strip()
-
-if __name__ == "__main__":
-    # CONFIGURATION
-    PDF_FILE = "sample.pdf"         # <-- Drop any PDF here and rename it to sample.pdf
-    MODEL_FILE = "model.gguf"       # <-- Put your downloaded GGUF file here and rename it to model.gguf
-    
-    if not os.path.exists(PDF_FILE) or not os.path.exists(MODEL_FILE):
-        print("\n[!] Setup required: Please make sure 'sample.pdf' and 'model.gguf' are in this folder.")
-    else:
-        # Run workflow
-        sections = extract_structured_sections(PDF_FILE)
-        print(f"Indexed {len(sections)} sections successfully.\n")
-        
-        query = input("Ask a question about your document: ")
-        
-        matched_title, matched_context = retrieve_relevant_section(query, sections)
-        print(f"Targeting Section: [{matched_title}]\n")
-        
-        final_answer = answer_question(query, matched_title, matched_context, MODEL_FILE)
-        print("\n================ ANSWER ================")
-        print(final_answer)
-        print("========================================")
+            try:
+                response = client.text_generation(prompt, max_new_tokens=256, temperature=0.1)
+                st.subheader("💡 Answer:")
+                st.write(response)
+            except Exception as e:
+                st.error(f"API Error: {e}. Try asking again.")
 
