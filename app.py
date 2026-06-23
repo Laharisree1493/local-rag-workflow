@@ -1,11 +1,12 @@
 import streamlit as st
 import pymupdf4llm
 import re
-from huggingface_hub import InferenceClient
+from groq import Groq
 
-# Initialize Hugging Face Serverless Client (Runs completely free in the cloud)
-# This replaces the heavy local llama-cpp engine that crashes Streamlit's free tier due to RAM limits
-client = InferenceClient("Qwen/Qwen2.5-7B-Instruct")
+# Initialize the Groq Client
+# Replace the string below with your actual gsk_... API key
+GROQ_API_KEY = "PASTE_YOUR_GROQ_API_KEY_HERE"
+client = Groq(api_key=GROQ_API_KEY)
 
 def extract_structured_sections(pdf_path):
     md_text = pymupdf4llm.to_markdown(pdf_path)
@@ -43,7 +44,7 @@ def retrieve_relevant_section(query, sections):
 # --- STREAMLIT UI CODE ---
 st.set_page_config(page_title="Mozilla Lightweight RAG", layout="centered")
 st.title("📄 Mozilla.ai Lightweight Document Q&A")
-st.write("Upload a structured PDF document to query it using a Roaming RAG architecture.")
+st.write("Upload a structured PDF document to query it using a Roaming RAG architecture (Groq Powered).")
 
 # File Uploader
 uploaded_file = st.file_uploader("Choose a PDF file", type="pdf")
@@ -68,20 +69,26 @@ if uploaded_file is not None:
         
         st.info(f"🎯 **Targeted Section:** {matched_title}")
         
-        # Call API for answer generation
-        with st.spinner("Generating answer..."):
-            prompt = f"""You are a helpful assistant answering questions strictly based on the context provided below.
-If the answer cannot be found in the context, say "I cannot find the information in this section."
-
-[Document Section: {matched_title}]
-{matched_context}
-
-Question: {user_query}
-Answer:"""
-
+        # Call Groq API for lightning fast answer generation
+        with st.spinner("Generating answer with Groq Llama 3..."):
             try:
-                response = client.text_generation(prompt, max_new_tokens=256, temperature=0.1)
+                chat_completion = client.chat.completions.create(
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": f"You are a helpful assistant answering questions strictly based on the context provided below.\nIf the answer cannot be found in the context, say 'I cannot find the information in this section.'\n\n[Document Section: {matched_title}]\n{matched_context}"
+                        },
+                        {
+                            "role": "user",
+                            "content": user_query,
+                        }
+                    ],
+                    model="llama3-8b-8192",
+                    temperature=0.1,
+                    max_tokens=512,
+                )
+                
                 st.subheader("💡 Answer:")
-                st.write(response)
+                st.write(chat_completion.choices[0].message.content)
             except Exception as e:
-                st.error(f"API Error: {e}. Try asking again.")
+                st.error(f"Groq API Error: {e}. Try asking again.")

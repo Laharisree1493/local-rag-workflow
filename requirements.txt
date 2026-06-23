@@ -1,4 +1,3 @@
 streamlit
 pymupdf4llm
-huggingface_hub
-
+groq
